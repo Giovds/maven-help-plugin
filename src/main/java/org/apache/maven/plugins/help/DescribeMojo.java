@@ -16,12 +16,16 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.maven.plugins.help.describe;
+package org.apache.maven.plugins.help;
 
+import org.apache.commons.lang3.StringUtils;
+import org.apache.maven.api.Artifact;
 import org.apache.maven.api.Lifecycle;
+import org.apache.maven.api.MojoExecution;
 import org.apache.maven.api.Session;
-import org.apache.maven.api.model.Plugin;
 import org.apache.maven.api.di.Inject;
+import org.apache.maven.api.model.Plugin;
+import org.apache.maven.api.plugin.LifecycleProvider;
 import org.apache.maven.api.plugin.MojoException;
 import org.apache.maven.api.plugin.annotations.Mojo;
 import org.apache.maven.api.plugin.descriptor.MojoDescriptor;
@@ -84,7 +88,10 @@ public class DescribeMojo extends AbstractHelpMojo {
     
     @Inject
     MessageBuilderFactory messageBuilderFactory;
-    
+
+    @Inject
+    private MojoExecution mojoExecution;
+
     // ----------------------------------------------------------------------
     // Mojo parameters
     // ----------------------------------------------------------------------
@@ -236,9 +243,10 @@ public class DescribeMojo extends AbstractHelpMojo {
                 throw new MojoException("Unable to find the plugin with prefix: " + pi.getPrefix(), e);
             }
         } else if (StringUtils.isNotEmpty(pi.getGroupId()) && StringUtils.isNotEmpty(pi.getArtifactId())) {
-            forLookup = new Plugin();
-            forLookup.setGroupId(pi.getGroupId());
-            forLookup.setArtifactId(pi.getArtifactId());
+            forLookup = Plugin.newBuilder(forLookup)
+                    .groupId(pi.getGroupId())
+                    .artifactId(pi.getArtifactId())
+                    .build();
         }
         if (forLookup == null) {
             String msg = "You must specify either: both 'groupId' and 'artifactId' parameters OR a 'plugin' parameter"
@@ -256,7 +264,9 @@ public class DescribeMojo extends AbstractHelpMojo {
         }
 
         if (StringUtils.isNotEmpty(pi.getVersion())) {
-            forLookup.setVersion(pi.getVersion());
+            Plugin.newBuilder(forLookup)
+                    .version(pi.getVersion())
+                    .build();
         } else {
             try {
                 DefaultPluginVersionRequest versionRequest = new DefaultPluginVersionRequest(forLookup, session);
@@ -404,8 +414,7 @@ public class DescribeMojo extends AbstractHelpMojo {
      * @throws MojoException   if any reflection exceptions occur.
      * @throws MojoException if any
      */
-    private void describeMojo(MojoDescriptor md, StringBuilder buffer)
-            throws MojoException, MojoException {
+    private void describeMojo(MojoDescriptor md, StringBuilder buffer) throws MojoException {
         buffer.append("Mojo: '").append(md.getFullGoalName()).append("'");
         buffer.append(LS);
 

@@ -65,7 +65,7 @@
 
   <properties>
     <javaVersion>17</javaVersion>
-    <mavenVersion>4.0.0-rc-3-SNAPSHOT</mavenVersion>
+    <mavenVersion>4.0.0-rc-3</mavenVersion>
 
     <guiceVersion>6.0.0</guiceVersion>
     <sisuVersion>0.9.0.M2</sisuVersion>
@@ -184,7 +184,7 @@
     <dependency>
       <groupId>org.apache.maven.plugin-testing</groupId>
       <artifactId>maven-plugin-testing-harness</artifactId>
-      <version>4.0.0-beta-4-SNAPSHOT</version>
+      <version>4.0.0-beta-4</version>
       <scope>test</scope>
     </dependency>
     <dependency>
