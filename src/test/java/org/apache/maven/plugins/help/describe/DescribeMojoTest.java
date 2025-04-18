@@ -16,11 +16,23 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.maven.plugins.help;
+package org.apache.maven.plugins.help.describe;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.Collections;
 
+import org.apache.maven.api.Project;
+import org.apache.maven.api.Session;
+import org.apache.maven.api.di.Inject;
+import org.apache.maven.api.plugin.testing.Basedir;
+import org.apache.maven.api.plugin.testing.InjectMojo;
+import org.apache.maven.api.plugin.testing.MojoParameter;
+import org.apache.maven.api.plugin.testing.MojoTest;
+import org.apache.maven.api.plugin.testing.stubs.ProjectStub;
+import org.apache.maven.api.plugin.testing.stubs.SessionMock;
+import org.apache.maven.api.services.Prompter;
+import org.apache.maven.api.settings.Server;
+import org.apache.maven.api.settings.Settings;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.lifecycle.internal.MojoDescriptorCreator;
 import org.apache.maven.model.Plugin;
@@ -31,7 +43,7 @@ import org.apache.maven.plugin.descriptor.PluginDescriptor;
 import org.apache.maven.plugin.version.PluginVersionRequest;
 import org.apache.maven.plugin.version.PluginVersionResolver;
 import org.apache.maven.plugin.version.PluginVersionResult;
-import org.apache.maven.plugins.help.DescribeMojo.PluginInfo;
+import org.apache.maven.plugins.help.describe.DescribeMojo.PluginInfo;
 import org.apache.maven.project.MavenProject;
 import org.eclipse.aether.RepositorySystemSession;
 import org.junit.Test;
@@ -48,7 +60,7 @@ import static org.mockito.Mockito.*;
  */
 public class DescribeMojoTest {
     /**
-     * Test method for {@link org.apache.maven.plugins.help.DescribeMojo#toLines(java.lang.String, int, int, int)}.
+     * Test method for {@link org.apache.maven.plugins.help.describe.DescribeMojo#toLines(java.lang.String, int, int, int)}.
      *
      */
     @Test
