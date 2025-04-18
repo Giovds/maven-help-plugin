@@ -18,6 +18,17 @@
  */
 package org.apache.maven.plugins.help;
 
+import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.file.Path;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
 import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.api.*;
 import org.apache.maven.api.di.Inject;
@@ -30,19 +41,10 @@ import org.apache.maven.api.plugin.descriptor.PluginDescriptor;
 import org.apache.maven.api.services.LifecycleRegistry;
 import org.apache.maven.api.services.MessageBuilder;
 import org.apache.maven.api.services.MessageBuilderFactory;
+import org.apache.maven.api.services.ProjectBuilder;
+import org.apache.maven.api.services.ProjectBuilderRequest;
 import org.apache.maven.plugins.help.converter.HtmlToPlainTextConverter;
 import org.apache.maven.reporting.MavenReport;
-
-import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.net.URL;
-import java.net.URLClassLoader;
-import java.nio.file.Path;
-import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * Displays a list of the attributes for a Maven Plugin and/or goals (aka Mojo - Maven plain Old Java Object).
@@ -86,6 +88,9 @@ public class DescribeMojo extends AbstractHelpMojo {
 
     @Inject
     LifecycleRegistry lifecycleRegistry;
+
+    @Inject
+    ProjectBuilder projectBuilder;
 
     // ----------------------------------------------------------------------
     // Mojo parameters
@@ -236,7 +241,7 @@ public class DescribeMojo extends AbstractHelpMojo {
         if (pi.getPrefix() != null && !pi.getPrefix().isEmpty()) {
             try {
                 forLookup = mojoDescriptorCreator.findPluginForPrefix(pi.getPrefix(), session);
-            } catch (NoPluginFoundForPrefixException e) {
+            } catch (MojoException e) {
                 throw new MojoException("Unable to find the plugin with prefix: " + pi.getPrefix(), e);
             }
         } else if (StringUtils.isNotEmpty(pi.getGroupId()) && StringUtils.isNotEmpty(pi.getArtifactId())) {
@@ -336,25 +341,25 @@ public class DescribeMojo extends AbstractHelpMojo {
      * @throws MojoException   if any reflection exceptions occur.
      * @throws MojoException if any
      */
-    private void describePlugin(PluginDescriptor pd, StringBuilder buffer) throws MojoException, MojoException {
+    private void describePlugin(PluginDescriptor pd, StringBuilder buffer) throws MojoException {
         append(buffer, pd.getId(), 0);
         buffer.append(LS);
 
         String name = pd.getName();
         if (name == null) {
             // Can be null because of MPLUGIN-137 (and descriptors generated with maven-plugin-tools-api <= 2.4.3)
-            Artifact aetherArtifact = new DefaultArtifact(pd.getGroupId(), pd.getArtifactId(), "jar", pd.getVersion());
-            ProjectBuildingRequest pbr = new DefaultProjectBuildingRequest(session.getProjectBuildingRequest());
-            pbr.setRemoteRepositories(project.getRemoteArtifactRepositories());
-            pbr.setPluginArtifactRepositories(project.getPluginArtifactRepositories());
-            pbr.setProject(null);
-            pbr.setValidationLevel(ModelBuildingRequest.VALIDATION_LEVEL_MINIMAL);
+            final ProjectBuilderRequest pbr = ProjectBuilderRequest.builder()
+                    .session(session)
+                    .path(project.getPomPath())
+                    .repositories(session.getRemoteRepositories())
+                    .processPlugins(true)
+                    .build();
             try {
-                Artifact artifactCopy = resolveArtifact(aetherArtifact).getArtifact();
-                name = projectBuilder
-                        .build(RepositoryUtils.toArtifact(artifactCopy), pbr)
-                        .getProject()
-                        .getName();
+                name = projectBuilder.build(pbr).getProject().orElseThrow().getBuild().getPlugins().stream()
+                        .filter(plugin -> pd.getId().equals(plugin.getId()))
+                        .findFirst()
+                        .orElseThrow()
+                        .getId();
             } catch (Exception e) {
                 // oh well, we tried our best.
                 getLog().warn("Unable to get the name of the plugin " + pd.getId() + ": " + e.getMessage());
@@ -829,8 +834,7 @@ public class DescribeMojo extends AbstractHelpMojo {
             DownloadedArtifact jar = resolveArtifact(
                     session.createArtifactCoordinates(pd.getGroupId(), pd.getArtifactId(), pd.getVersion(), "jar"));
             DownloadedArtifact pom = resolveArtifact(
-                    session.createArtifactCoordinates(pd.getGroupId(), pd.getArtifactId(), pd.getVersion(), "pom")
-            );
+                    session.createArtifactCoordinates(pd.getGroupId(), pd.getArtifactId(), pd.getVersion(), "pom"));
 
             Project project = getMavenProject(pom.toCoordinates().getId());
             urls.add(jar.getPath().toUri().toURL());

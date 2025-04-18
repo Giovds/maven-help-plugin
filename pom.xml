@@ -113,11 +113,11 @@
       <artifactId>maven-reporting-api</artifactId>
       <version>4.0.0</version>
       <exclusions>
-          <!-- we only need one interface MavenReport -->
-          <exclusion>
-              <groupId>*</groupId>
-              <artifactId>*</artifactId>
-          </exclusion>
+        <!-- we only need one interface MavenReport -->
+        <exclusion>
+          <groupId>*</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
 
