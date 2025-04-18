@@ -195,7 +195,7 @@ public class DescribeMojo extends AbstractHelpMojo {
                     throw new MojoException(
                             "The goal '" + goal + "' does not exist in the plugin '" + pi.getPrefix() + "'");
                 }
-                describeMojo(mojo, descriptionBuffer);
+                describeMojo(mojo, descriptor, descriptionBuffer);
             } else {
                 describePlugin(descriptor, descriptionBuffer);
             }
@@ -404,16 +404,18 @@ public class DescribeMojo extends AbstractHelpMojo {
     /**
      * Displays information about the Plugin Mojo
      *
-     * @param md     contains the description of the Plugin Mojo
-     * @param buffer the displayed output
-     * @throws MojoException   if any reflection exceptions occur.
+     * @param md         contains the description of the Plugin Mojo
+     * @param pluginDescriptor
+     * @param buffer     the displayed output
+     * @throws MojoException if any reflection exceptions occur.
      * @throws MojoException if any
      */
-    private void describeMojo(MojoDescriptor md, StringBuilder buffer) throws MojoException {
+    private void describeMojo(MojoDescriptor md, final PluginDescriptor pluginDescriptor, StringBuilder buffer)
+            throws MojoException {
         buffer.append("Mojo: '").append(md.getFullGoalName()).append("'");
         buffer.append(LS);
 
-        describeMojoGuts(md, buffer, detail);
+        describeMojoGuts(md, pluginDescriptor, buffer, detail);
         buffer.append(LS);
 
         if (!detail) {
@@ -433,7 +435,7 @@ public class DescribeMojo extends AbstractHelpMojo {
      * @throws MojoException if any
      */
     private void describeMojoGuts(MojoDescriptor md, PluginDescriptor pd, StringBuilder buffer, boolean fullDescription)
-            throws MojoException, MojoException {
+            throws MojoException {
         append(buffer, buffer().strong(md.getFullGoalName()).toString(), 0);
 
         // indent 1
@@ -525,8 +527,11 @@ public class DescribeMojo extends AbstractHelpMojo {
             String defaultVal = parameter.getDefaultValue();
             if (defaultVal == null) {
                 // defaultVal is ALWAYS null, this is a bug in PluginDescriptorBuilder (cf. MNG-4941)
-                defaultVal =
-                        md.getMojoConfiguration().getChild(parameter.getName()).getAttribute("default-value", null);
+                defaultVal = md.getParameters().stream()
+                        .filter(p -> p.getName().equals(parameter.getName()))
+                        .findFirst()
+                        .map(Parameter::getDefaultValue)
+                        .orElse(null);
             }
 
             if (defaultVal != null && !defaultVal.isEmpty()) {
@@ -549,8 +554,11 @@ public class DescribeMojo extends AbstractHelpMojo {
             if (expression == null || expression.isEmpty()) {
                 // expression is ALWAYS null, this is a bug in PluginDescriptorBuilder (cf. MNG-4941).
                 // Fixed with Maven-3.0.1
-                expression =
-                        md.getMojoConfiguration().getChild(parameter.getName()).getValue(null);
+                expression = md.getParameters().stream()
+                        .filter(p -> p.getName().equals(parameter.getName()))
+                        .findFirst()
+                        .map(Parameter::getExpression)
+                        .orElse(null);
             }
             if (expression != null && !expression.isEmpty()) {
                 Matcher matcher = EXPRESSION.matcher(expression);
