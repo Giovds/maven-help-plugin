@@ -18,22 +18,6 @@
  */
 package org.apache.maven.plugins.help;
 
-import org.apache.commons.lang3.StringUtils;
-import org.apache.maven.api.Artifact;
-import org.apache.maven.api.Lifecycle;
-import org.apache.maven.api.MojoExecution;
-import org.apache.maven.api.Session;
-import org.apache.maven.api.di.Inject;
-import org.apache.maven.api.model.Plugin;
-import org.apache.maven.api.plugin.LifecycleProvider;
-import org.apache.maven.api.plugin.MojoException;
-import org.apache.maven.api.plugin.annotations.Mojo;
-import org.apache.maven.api.plugin.descriptor.MojoDescriptor;
-import org.apache.maven.api.plugin.descriptor.Parameter;
-import org.apache.maven.api.plugin.descriptor.PluginDescriptor;
-import org.apache.maven.api.services.MessageBuilder;
-import org.apache.maven.api.services.MessageBuilderFactory;
-
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
@@ -41,13 +25,32 @@ import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.StringTokenizer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import org.apache.commons.lang3.StringUtils;
+import org.apache.maven.api.Artifact;
+import org.apache.maven.api.Lifecycle;
+import org.apache.maven.api.Session;
+import org.apache.maven.api.di.Inject;
+import org.apache.maven.api.model.Plugin;
+import org.apache.maven.api.plugin.MojoException;
+import org.apache.maven.api.plugin.annotations.Mojo;
+import org.apache.maven.api.plugin.descriptor.MojoDescriptor;
+import org.apache.maven.api.plugin.descriptor.Parameter;
+import org.apache.maven.api.plugin.descriptor.PluginDescriptor;
+import org.apache.maven.api.services.LifecycleRegistry;
+import org.apache.maven.api.services.MessageBuilder;
+import org.apache.maven.api.services.MessageBuilderFactory;
+import org.apache.maven.lifecycle.internal.MojoDescriptorCreator;
 
 /**
  * Displays a list of the attributes for a Maven Plugin and/or goals (aka Mojo - Maven plain Old Java Object).
@@ -82,15 +85,18 @@ public class DescribeMojo extends AbstractHelpMojo {
     // ----------------------------------------------------------------------
     // Mojo components
     // ----------------------------------------------------------------------
-    
+
     @Inject
     Session session;
-    
+
     @Inject
     MessageBuilderFactory messageBuilderFactory;
 
     @Inject
-    private MojoExecution mojoExecution;
+    LifecycleRegistry lifecycleRegistry;
+
+    @Inject
+    MojoDescriptorCreator mojoDescriptorCreator;
 
     // ----------------------------------------------------------------------
     // Mojo parameters
@@ -187,8 +193,10 @@ public class DescribeMojo extends AbstractHelpMojo {
             PluginInfo pi = parsePluginLookupInfo();
             PluginDescriptor descriptor = lookupPluginDescriptor(pi);
             if (goal != null && !goal.isEmpty()) {
-                MojoDescriptor mojo = descriptor.getMojos()
-                        .stream().filter(m -> goal.equals(m.getGoal())).findAny().orElse(null);
+                MojoDescriptor mojo = descriptor.getMojos().stream()
+                        .filter(m -> goal.equals(m.getGoal()))
+                        .findAny()
+                        .orElse(null);
                 if (mojo == null) {
                     throw new MojoException(
                             "The goal '" + goal + "' does not exist in the plugin '" + pi.getPrefix() + "'");
@@ -264,9 +272,7 @@ public class DescribeMojo extends AbstractHelpMojo {
         }
 
         if (StringUtils.isNotEmpty(pi.getVersion())) {
-            Plugin.newBuilder(forLookup)
-                    .version(pi.getVersion())
-                    .build();
+            Plugin.newBuilder(forLookup).version(pi.getVersion()).build();
         } else {
             try {
                 DefaultPluginVersionRequest versionRequest = new DefaultPluginVersionRequest(forLookup, session);
@@ -341,8 +347,7 @@ public class DescribeMojo extends AbstractHelpMojo {
      * @throws MojoException   if any reflection exceptions occur.
      * @throws MojoException if any
      */
-    private void describePlugin(PluginDescriptor pd, StringBuilder buffer)
-            throws MojoException, MojoException {
+    private void describePlugin(PluginDescriptor pd, StringBuilder buffer) throws MojoException, MojoException {
         append(buffer, pd.getId(), 0);
         buffer.append(LS);
 
@@ -372,11 +377,7 @@ public class DescribeMojo extends AbstractHelpMojo {
         append(buffer, "Group Id", pd.getGroupId(), 0);
         append(buffer, "Artifact Id", pd.getArtifactId(), 0);
         append(buffer, "Version", pd.getVersion(), 0);
-        append(
-                buffer,
-                "Goal Prefix",
-                buffer().strong(pd.getGoalPrefix()).toString(),
-                0);
+        append(buffer, "Goal Prefix", buffer().strong(pd.getGoalPrefix()).toString(), 0);
         buffer.append(LS);
 
         List<MojoDescriptor> mojos = pd.getMojos();
@@ -449,10 +450,7 @@ public class DescribeMojo extends AbstractHelpMojo {
         }
 
         if (deprecation != null && !deprecation.isEmpty()) {
-            append(
-                    buffer,
-                    buffer().warning("Deprecated. " + deprecation).toString(),
-                    1);
+            append(buffer, buffer().warning("Deprecated. " + deprecation).toString(), 1);
         }
 
         if (isReportGoal(md)) {
@@ -506,8 +504,7 @@ public class DescribeMojo extends AbstractHelpMojo {
      * @throws MojoException   if any reflection exceptions occur.
      * @throws MojoException if any
      */
-    private void describeMojoParameters(MojoDescriptor md, StringBuilder buffer)
-            throws MojoException, MojoException {
+    private void describeMojoParameters(MojoDescriptor md, StringBuilder buffer) throws MojoException, MojoException {
         List<Parameter> params = md.getParameters();
 
         if (params == null || params.isEmpty()) {
@@ -577,12 +574,7 @@ public class DescribeMojo extends AbstractHelpMojo {
             }
 
             if (deprecation != null && !deprecation.isEmpty()) {
-                append(
-                        buffer,
-                        buffer()
-                                .warning("Deprecated. " + deprecation)
-                                .toString(),
-                        3);
+                append(buffer, buffer().warning("Deprecated. " + deprecation).toString(), 3);
             }
         }
     }
@@ -597,24 +589,20 @@ public class DescribeMojo extends AbstractHelpMojo {
     private boolean describeCommand(StringBuilder descriptionBuffer) throws MojoException {
         if (cmd.indexOf(':') == -1) {
             // phase
-            Lifecycle lifecycle = defaultLifecycles.getPhaseToLifecycleMap().get(cmd);
-            if (lifecycle == null) {
-                throw new MojoException("The given phase '" + cmd + "' is an unknown phase.");
-            }
+            final Map<String, Lifecycle> allMainPhases = getAllMainPhases();
+            final Lifecycle cmdLifecycle = Optional.ofNullable(allMainPhases.get(cmd))
+                    .orElseThrow(() -> new MojoException("The given phase '" + cmd + "' is an unknown phase."));
 
-            Map<String, String> defaultLifecyclePhases = lifecycleMappings
-                    .get(project.getPackaging())
-                    .getLifecycles()
-                    .get("default")
-                    .getPhases();
-            List<String> phases = lifecycle.getPhases();
+            final Map<String, String> defaultLifecyclePhases = getDefaultLifecyclePhasesWithGoals();
+            final List<String> cmdLifecyclePhases =
+                    cmdLifecycle.allPhases().map(Lifecycle.Phase::name).toList();
 
-            if (lifecycle.getDefaultPhases() == null) {
+            if (cmdLifecycle.phases().isEmpty()) {
                 descriptionBuffer.append("'").append(cmd);
                 descriptionBuffer
                         .append("' is a phase corresponding to this plugin:")
                         .append(LS);
-                for (String key : phases) {
+                for (String key : cmdLifecyclePhases) {
                     if (!key.equals(cmd)) {
                         continue;
                     }
@@ -629,7 +617,7 @@ public class DescribeMojo extends AbstractHelpMojo {
                 descriptionBuffer.append(project.getPackaging());
                 descriptionBuffer.append("'. This lifecycle includes the following phases:");
                 descriptionBuffer.append(LS);
-                for (String key : phases) {
+                for (String key : cmdLifecyclePhases) {
                     descriptionBuffer.append("* ").append(key).append(": ");
                     String value = defaultLifecyclePhases.get(key);
                     if (value != null && !value.isEmpty()) {
@@ -648,16 +636,14 @@ public class DescribeMojo extends AbstractHelpMojo {
                 }
             } else {
                 descriptionBuffer.append("'").append(cmd);
-                descriptionBuffer.append("' is a phase within the '").append(lifecycle.getId());
+                descriptionBuffer.append("' is a phase within the '").append(cmdLifecycle.id());
                 descriptionBuffer.append("' lifecycle, which has the following phases: ");
                 descriptionBuffer.append(LS);
 
-                for (String key : phases) {
+                for (String key : cmdLifecyclePhases) {
                     descriptionBuffer.append("* ").append(key).append(": ");
-                    if (lifecycle.getDefaultPhases().get(key) != null) {
-                        descriptionBuffer
-                                .append(lifecycle.getDefaultPhases().get(key))
-                                .append(LS);
+                    if (allMainPhases.get(key) != null) {
+                        descriptionBuffer.append(allMainPhases.get(key)).append(LS);
                     } else {
                         descriptionBuffer.append(NOT_DEFINED).append(LS);
                     }
@@ -667,22 +653,47 @@ public class DescribeMojo extends AbstractHelpMojo {
         }
 
         // goals
-        MojoDescriptor mojoDescriptor;
-        try {
-            mojoDescriptor = mojoDescriptorCreator.getMojoDescriptor(cmd, session, project);
-        } catch (Exception e) {
-            throw new MojoException("Unable to get descriptor for " + cmd, e);
-        }
+        final String[] cmdArgs = cmd.split(":");
         descriptionBuffer
                 .append("'")
                 .append(cmd)
                 .append("' is a plugin goal (aka mojo)")
                 .append(".");
         descriptionBuffer.append(LS);
-        plugin = mojoDescriptor.getPluginDescriptor().getId();
-        goal = mojoDescriptor.getGoal();
+
+        plugin = Arrays.stream(cmdArgs, 0, cmdArgs.length - 1).collect(Collectors.joining(":"));
+        goal = cmdArgs[cmdArgs.length - 1];
 
         return true;
+    }
+
+    private Map<String, String> getDefaultLifecyclePhasesWithGoals() {
+        final Collection<Lifecycle.Phase> defaultLifecycleMainPhases = lifecycleRegistry.stream()
+                .filter(x -> Lifecycle.DEFAULT.equals(x.id()))
+                .findFirst()
+                .orElseThrow()
+                .phases();
+
+        final Map<String, String> defaultLifecyclePhases = new HashMap<>();
+        for (final Lifecycle.Phase defaultLifecycleMainPhase : defaultLifecycleMainPhases) {
+            for (final Plugin pl : defaultLifecycleMainPhase.plugins()) {
+                final String goals = pl.getExecutions().stream()
+                        .flatMap(execution -> execution.getGoals().stream())
+                        .collect(Collectors.joining(","));
+                defaultLifecyclePhases.put(defaultLifecycleMainPhase.name(), goals);
+            }
+        }
+        return defaultLifecyclePhases;
+    }
+
+    private Map<String, Lifecycle> getAllMainPhases() {
+        Map<String, Lifecycle> phases = new HashMap<>();
+        for (Lifecycle lifecycle : lifecycleRegistry) {
+            for (Lifecycle.Phase phase : lifecycle.allPhases().toList()) {
+                phases.putIfAbsent(phase.name(), lifecycle);
+            }
+        }
+        return phases;
     }
 
     /**
@@ -741,8 +752,7 @@ public class DescribeMojo extends AbstractHelpMojo {
      * @throws MojoException if any
      * @see #toLines(String, int, int, int)
      */
-    private static void append(StringBuilder sb, String description, int indent)
-            throws MojoException, MojoException {
+    private static void append(StringBuilder sb, String description, int indent) throws MojoException, MojoException {
         if (description == null || description.isEmpty()) {
             sb.append(UNKNOWN).append(LS);
             return;
