@@ -33,6 +33,7 @@ import org.apache.maven.api.plugin.descriptor.Parameter;
 import org.apache.maven.api.plugin.descriptor.PluginDescriptor;
 import org.apache.maven.api.services.MessageBuilder;
 import org.apache.maven.api.services.MessageBuilderFactory;
+import org.apache.maven.plugins.help.converter.HtmlToPlainTextConverter;
 
 import java.io.File;
 import java.io.IOException;
