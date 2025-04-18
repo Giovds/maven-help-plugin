@@ -108,18 +108,18 @@
     <!--      </exclusions>-->
     <!--    </dependency>-->
 
-    <!--    <dependency>-->
-    <!--      <groupId>org.apache.maven.reporting</groupId>-->
-    <!--      <artifactId>maven-reporting-api</artifactId>-->
-    <!--      <version>3.1.1</version>-->
-    <!--      <exclusions>-->
-    <!--        &lt;!&ndash; we only need one interface MavenReport &ndash;&gt;-->
-    <!--        <exclusion>-->
-    <!--          <groupId>*</groupId>-->
-    <!--          <artifactId>*</artifactId>-->
-    <!--        </exclusion>-->
-    <!--      </exclusions>-->
-    <!--    </dependency>-->
+    <dependency>
+      <groupId>org.apache.maven.reporting</groupId>
+      <artifactId>maven-reporting-api</artifactId>
+      <version>4.0.0</version>
+      <exclusions>
+          <!-- we only need one interface MavenReport -->
+          <exclusion>
+              <groupId>*</groupId>
+              <artifactId>*</artifactId>
+          </exclusion>
+      </exclusions>
+    </dependency>
 
     <!--    <dependency>-->
     <!--      <groupId>org.codehaus.plexus</groupId>-->

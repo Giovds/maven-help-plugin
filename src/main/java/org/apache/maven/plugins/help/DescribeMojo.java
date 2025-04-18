@@ -19,13 +19,9 @@
 package org.apache.maven.plugins.help;
 
 import org.apache.commons.lang3.StringUtils;
-import org.apache.maven.api.Artifact;
-import org.apache.maven.api.Lifecycle;
-import org.apache.maven.api.MojoExecution;
-import org.apache.maven.api.Session;
+import org.apache.maven.api.*;
 import org.apache.maven.api.di.Inject;
 import org.apache.maven.api.model.Plugin;
-import org.apache.maven.api.plugin.LifecycleProvider;
 import org.apache.maven.api.plugin.MojoException;
 import org.apache.maven.api.plugin.annotations.Mojo;
 import org.apache.maven.api.plugin.descriptor.MojoDescriptor;
@@ -34,13 +30,14 @@ import org.apache.maven.api.plugin.descriptor.PluginDescriptor;
 import org.apache.maven.api.services.MessageBuilder;
 import org.apache.maven.api.services.MessageBuilderFactory;
 import org.apache.maven.plugins.help.converter.HtmlToPlainTextConverter;
+import org.apache.maven.reporting.MavenReport;
 
-import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -396,7 +393,7 @@ public class DescribeMojo extends AbstractHelpMojo {
                     .collect(Collectors.toList());
 
             for (MojoDescriptor md : mojos) {
-                describeMojoGuts(md, buffer, detail);
+                describeMojoGuts(md, pd, buffer, detail);
                 buffer.append(LS);
             }
         }
@@ -432,12 +429,13 @@ public class DescribeMojo extends AbstractHelpMojo {
      * Displays detailed information about the Plugin Mojo
      *
      * @param md              contains the description of the Plugin Mojo
+     * @param pd              contains the description of the Plugin
      * @param buffer          contains information to be printed or displayed
      * @param fullDescription specifies whether all the details about the Plugin Mojo is to  be displayed
      * @throws MojoException   if any reflection exceptions occur.
      * @throws MojoException if any
      */
-    private void describeMojoGuts(MojoDescriptor md, StringBuilder buffer, boolean fullDescription)
+    private void describeMojoGuts(MojoDescriptor md, PluginDescriptor pd, StringBuilder buffer, boolean fullDescription)
             throws MojoException, MojoException {
         append(buffer, buffer().strong(md.getFullGoalName()).toString(), 0);
 
@@ -456,7 +454,7 @@ public class DescribeMojo extends AbstractHelpMojo {
                     1);
         }
 
-        if (isReportGoal(md)) {
+        if (isReportGoal(md, pd)) {
             append(buffer, "Note", "This goal should be used as a Maven report.", 1);
         }
 
@@ -821,28 +819,24 @@ public class DescribeMojo extends AbstractHelpMojo {
      * transitive dependencies to determine if the Java class of this goal implements <code>MavenReport</code>.
      *
      * @param md Mojo descriptor
+     * @param pd The plugin descriptor containing information about the plugin.
      * @return Whether this goal should be used as a report.
      */
-    private boolean isReportGoal(MojoDescriptor md) {
-        PluginDescriptor pd = md.getPluginDescriptor();
+    private boolean isReportGoal(MojoDescriptor md, PluginDescriptor pd) {
         List<URL> urls = new ArrayList<>();
-        ProjectBuildingRequest pbr = new DefaultProjectBuildingRequest(session.getProjectBuildingRequest());
-        pbr.setRemoteRepositories(project.getRemoteArtifactRepositories());
-        pbr.setPluginArtifactRepositories(project.getPluginArtifactRepositories());
-        pbr.setResolveDependencies(true);
-        pbr.setProject(null);
-        pbr.setValidationLevel(ModelBuildingRequest.VALIDATION_LEVEL_MINIMAL);
         try {
-            Artifact jar = resolveArtifact(
-                            new DefaultArtifact(pd.getGroupId(), pd.getArtifactId(), "jar", pd.getVersion()))
-                    .getArtifact();
-            Artifact pom = resolveArtifact(
-                            new DefaultArtifact(pd.getGroupId(), pd.getArtifactId(), "pom", pd.getVersion()))
-                    .getArtifact();
-            MavenProject mavenProject = projectBuilder.build(pom.getFile(), pbr).getProject();
-            urls.add(jar.getFile().toURI().toURL());
-            for (String artifact : mavenProject.getCompileClasspathElements()) {
-                urls.add(new File(artifact).toURI().toURL());
+            DownloadedArtifact jar = resolveArtifact(
+                    session.createArtifactCoordinates(pd.getGroupId(), pd.getArtifactId(), pd.getVersion(), "jar"));
+            DownloadedArtifact pom = resolveArtifact(
+                    session.createArtifactCoordinates(pd.getGroupId(), pd.getArtifactId(), pd.getVersion(), "pom")
+            );
+
+            Project project = getMavenProject(pom.toCoordinates().getId());
+            urls.add(jar.getPath().toUri().toURL());
+
+            var dependencyPaths = session.resolveDependencies(project.getManagedDependencies());
+            for (Path dependencyPath : dependencyPaths) {
+                urls.add(dependencyPath.toUri().toURL());
             }
             try (URLClassLoader classLoader =
                     new URLClassLoader(urls.toArray(new URL[0]), getClass().getClassLoader())) {
