@@ -19,37 +19,29 @@
 package org.apache.maven.plugins.help;
 
 import java.lang.reflect.InvocationTargetException;
-import java.util.Collections;
+import java.util.List;
 
-import org.apache.maven.execution.MavenSession;
-import org.apache.maven.lifecycle.internal.MojoDescriptorCreator;
-import org.apache.maven.model.Plugin;
-import org.apache.maven.plugin.MavenPluginManager;
-import org.apache.maven.plugin.descriptor.MojoDescriptor;
-import org.apache.maven.plugin.descriptor.Parameter;
-import org.apache.maven.plugin.descriptor.PluginDescriptor;
-import org.apache.maven.plugin.version.PluginVersionRequest;
-import org.apache.maven.plugin.version.PluginVersionResolver;
-import org.apache.maven.plugin.version.PluginVersionResult;
+import org.apache.maven.api.Session;
+import org.apache.maven.api.plugin.descriptor.MojoDescriptor;
+import org.apache.maven.api.plugin.testing.stubs.PluginStub;
+import org.apache.maven.api.services.MessageBuilderFactory;
+import org.apache.maven.impl.DefaultMessageBuilder;
 import org.apache.maven.plugins.help.DescribeMojo.PluginInfo;
-import org.apache.maven.project.MavenProject;
-import org.eclipse.aether.RepositorySystemSession;
-import org.junit.Test;
-import org.mockito.ArgumentCaptor;
+import org.apache.maven.plugins.help.stubs.BuildProjectStub;
+import org.junit.jupiter.api.Test;
 
 import static org.apache.commons.lang3.reflect.FieldUtils.writeDeclaredField;
-import static org.apache.commons.lang3.reflect.FieldUtils.writeField;
 import static org.apache.commons.lang3.reflect.MethodUtils.invokeMethod;
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * @author <a href="mailto:vincent.siveton@gmail.com">Vincent Siveton</a>
  */
 public class DescribeMojoTest {
     /**
-     * Test method for {@link DescribeMojo#toLines(java.lang.String, int, int, int)}.
-     *
+     * Test method for expressions root.
      */
     @Test
     public void testGetExpressionsRoot() {
@@ -64,16 +56,25 @@ public class DescribeMojoTest {
     @Test
     public void testValidExpression() throws Exception {
         StringBuilder sb = new StringBuilder();
-        MojoDescriptor md = new MojoDescriptor();
-        Parameter parameter = new Parameter();
-        parameter.setName("name");
-        parameter.setExpression("${valid.expression}");
-        md.addParameter(parameter);
+        MojoDescriptor md = MojoDescriptor.newBuilder()
+                .parameters(List.of(org.apache.maven.api.plugin.descriptor.Parameter.newBuilder()
+                        .name("name")
+                        .expression("${valid.expression}")
+                        .build()))
+                .build();
 
         String ls = System.getProperty("line.separator");
 
+        Session session = mock(Session.class);
+        MessageBuilderFactory messageBuilderFactory = mock(MessageBuilderFactory.class);
+        when(session.getService(MessageBuilderFactory.class)).thenReturn(messageBuilderFactory);
+        when(messageBuilderFactory.builder()).thenReturn(new DefaultMessageBuilder());
+
+        DescribeMojo mojo = new DescribeMojo();
+        mojo.session = session;
+
         try {
-            invokeMethod(new DescribeMojo(), true, "describeMojoParameters", md, sb);
+            invokeMethod(mojo, true, "describeMojoParameters", md, sb);
 
             assertEquals(
                     "  Available parameters:" + ls + ls + "    name" + ls + "      User property: valid.expression" + ls
@@ -87,16 +88,25 @@ public class DescribeMojoTest {
     @Test
     public void testInvalidExpression() throws Exception {
         StringBuilder sb = new StringBuilder();
-        MojoDescriptor md = new MojoDescriptor();
-        Parameter parameter = new Parameter();
-        parameter.setName("name");
-        parameter.setExpression("${project.build.directory}/generated-sources/foobar"); // this is a defaultValue
-        md.addParameter(parameter);
+        MojoDescriptor md = MojoDescriptor.newBuilder()
+                .parameters(List.of(org.apache.maven.api.plugin.descriptor.Parameter.newBuilder()
+                        .name("name")
+                        .expression("${project.build.directory}/generated-sources/foobar")
+                        .build()))
+                .build();
 
         String ls = System.getProperty("line.separator");
 
+        Session session = mock(Session.class);
+        MessageBuilderFactory messageBuilderFactory = mock(MessageBuilderFactory.class);
+        when(session.getService(MessageBuilderFactory.class)).thenReturn(messageBuilderFactory);
+        when(messageBuilderFactory.builder()).thenReturn(new DefaultMessageBuilder());
+
+        DescribeMojo mojo = new DescribeMojo();
+        mojo.session = session;
+
         try {
-            invokeMethod(new DescribeMojo(), true, "describeMojoParameters", md, sb);
+            invokeMethod(mojo, true, "describeMojoParameters", md, sb);
 
             assertEquals(
                     "  Available parameters:" + ls + ls
@@ -184,134 +194,83 @@ public class DescribeMojoTest {
 
     @Test
     public void testLookupPluginDescriptorPrefixWithVersion() throws Throwable {
-        DescribeMojo mojo = new DescribeMojo();
+        Session session = mock(Session.class);
 
         PluginInfo pi = new PluginInfo();
-        pi.setPrefix("help");
+        pi.setPrefix("test");
         pi.setVersion("1.0");
 
-        Plugin plugin = new Plugin();
-        plugin.setGroupId("org.test");
-        plugin.setArtifactId("test");
+        PluginStub pluginStub = new PluginStub();
+        pluginStub.setModel(org.apache.maven.api.model.Plugin.newBuilder()
+                .groupId("org.test")
+                .artifactId("test")
+                .build());
 
-        PluginDescriptor pd = new PluginDescriptor();
+        BuildProjectStub project = new BuildProjectStub();
+        project.setPlugins(List.of(pluginStub.getModel()));
 
-        MojoDescriptorCreator mojoDescriptorCreator = mock(MojoDescriptorCreator.class);
-        PluginVersionResolver pluginVersionResolver = mock(PluginVersionResolver.class);
-        MavenPluginManager pluginManager = mock(MavenPluginManager.class);
-        MavenSession session = mock(MavenSession.class);
-        when(session.getRepositorySession()).thenReturn(mock(RepositorySystemSession.class));
-        writeDeclaredField(mojo, "mojoDescriptorCreator", mojoDescriptorCreator, true);
-        writeDeclaredField(mojo, "pluginVersionResolver", pluginVersionResolver, true);
-        writeDeclaredField(mojo, "pluginManager", pluginManager, true);
-        writeField(mojo, "session", session, true);
-        MavenProject mavenProject = new MavenProject();
-        mavenProject.setPluginArtifactRepositories(Collections.emptyList());
-        writeField(mojo, "project", mavenProject, true);
-        when(mojoDescriptorCreator.findPluginForPrefix("help", session)).thenReturn(plugin);
-        when(pluginManager.getPluginDescriptor(any(Plugin.class), anyList(), any()))
-                .thenReturn(pd);
+        DescribeMojo mojo = new DescribeMojo();
+        mojo.session = session;
+        mojo.project = project;
 
-        PluginDescriptor returned = (PluginDescriptor) invokeMethod(mojo, true, "lookupPluginDescriptor", pi);
+        org.apache.maven.api.plugin.descriptor.PluginDescriptor returned =
+                (org.apache.maven.api.plugin.descriptor.PluginDescriptor)
+                        invokeMethod(mojo, true, "lookupPluginDescriptor", pi);
 
-        assertEquals(pd, returned);
-
-        verify(mojoDescriptorCreator).findPluginForPrefix("help", session);
-        verify(pluginVersionResolver, never()).resolve(any(PluginVersionRequest.class));
-        ArgumentCaptor<Plugin> argument = ArgumentCaptor.forClass(Plugin.class);
-        verify(pluginManager).getPluginDescriptor(argument.capture(), anyList(), any());
-        Plugin capturedPlugin = argument.getValue();
-        assertEquals("org.test", capturedPlugin.getGroupId());
-        assertEquals("test", capturedPlugin.getArtifactId());
-        assertEquals("1.0", capturedPlugin.getVersion());
+        assertEquals("org.test", returned.getGroupId());
+        assertEquals("test", returned.getArtifactId());
+        assertEquals("1.0", returned.getVersion());
     }
 
     @Test
     public void testLookupPluginDescriptorPrefixWithoutVersion() throws Throwable {
-        DescribeMojo mojo = new DescribeMojo();
+        Session session = mock(Session.class);
 
         PluginInfo pi = new PluginInfo();
         pi.setPrefix("help");
 
-        Plugin plugin = new Plugin();
-        plugin.setGroupId("org.test");
-        plugin.setArtifactId("test");
+        PluginStub pluginStub = new PluginStub();
+        pluginStub.setModel(org.apache.maven.api.model.Plugin.newBuilder()
+                .groupId("org.apache.maven.plugins")
+                .artifactId("maven-help-plugin")
+                .version("1.0")
+                .build());
 
-        PluginDescriptor pd = new PluginDescriptor();
+        BuildProjectStub project = new BuildProjectStub();
+        project.setPlugins(List.of(pluginStub.getModel()));
 
-        MojoDescriptorCreator mojoDescriptorCreator = mock(MojoDescriptorCreator.class);
-        PluginVersionResolver pluginVersionResolver = mock(PluginVersionResolver.class);
-        MavenPluginManager pluginManager = mock(MavenPluginManager.class);
-        PluginVersionResult versionResult = mock(PluginVersionResult.class);
-        MavenSession session = mock(MavenSession.class);
-        when(session.getRepositorySession()).thenReturn(mock(RepositorySystemSession.class));
-        writeDeclaredField(mojo, "mojoDescriptorCreator", mojoDescriptorCreator, true);
-        writeDeclaredField(mojo, "pluginVersionResolver", pluginVersionResolver, true);
-        writeDeclaredField(mojo, "pluginManager", pluginManager, true);
-        writeField(mojo, "session", session, true);
-        MavenProject mavenProject = new MavenProject();
-        mavenProject.setPluginArtifactRepositories(Collections.emptyList());
-        writeField(mojo, "project", mavenProject, true);
-        when(mojoDescriptorCreator.findPluginForPrefix("help", session)).thenReturn(plugin);
-        when(pluginVersionResolver.resolve(any(PluginVersionRequest.class))).thenReturn(versionResult);
-        when(versionResult.getVersion()).thenReturn("1.0");
-        when(pluginManager.getPluginDescriptor(any(Plugin.class), anyList(), any()))
-                .thenReturn(pd);
+        DescribeMojo mojo = new DescribeMojo();
+        mojo.session = session;
+        mojo.project = project;
 
-        PluginDescriptor returned = (PluginDescriptor) invokeMethod(mojo, true, "lookupPluginDescriptor", pi);
-        assertEquals(pd, returned);
+        org.apache.maven.api.plugin.descriptor.PluginDescriptor returned =
+                (org.apache.maven.api.plugin.descriptor.PluginDescriptor)
+                        invokeMethod(mojo, true, "lookupPluginDescriptor", pi);
 
-        verify(mojoDescriptorCreator).findPluginForPrefix("help", session);
-        ArgumentCaptor<PluginVersionRequest> versionArgument = ArgumentCaptor.forClass(PluginVersionRequest.class);
-        verify(pluginVersionResolver).resolve(versionArgument.capture());
-        assertEquals("org.test", versionArgument.getValue().getGroupId());
-        assertEquals("test", versionArgument.getValue().getArtifactId());
-        ArgumentCaptor<Plugin> argument = ArgumentCaptor.forClass(Plugin.class);
-        verify(pluginManager).getPluginDescriptor(argument.capture(), anyList(), any());
-        Plugin capturedPlugin = argument.getValue();
-        assertEquals("org.test", capturedPlugin.getGroupId());
-        assertEquals("test", capturedPlugin.getArtifactId());
-        assertEquals("1.0", capturedPlugin.getVersion());
+        assertEquals("org.apache.maven.plugins", returned.getGroupId());
+        assertEquals("maven-help-plugin", returned.getArtifactId());
+        assertEquals("1.0", returned.getVersion());
     }
 
     @Test
     public void testLookupPluginDescriptorGAV() throws Throwable {
-        DescribeMojo mojo = new DescribeMojo();
+        Session session = mock(Session.class);
 
         PluginInfo pi = new PluginInfo();
         pi.setGroupId("org.test");
         pi.setArtifactId("test");
         pi.setVersion("1.0");
 
-        PluginDescriptor pd = new PluginDescriptor();
+        DescribeMojo mojo = new DescribeMojo();
+        mojo.session = session;
 
-        MojoDescriptorCreator mojoDescriptorCreator = mock(MojoDescriptorCreator.class);
-        PluginVersionResolver pluginVersionResolver = mock(PluginVersionResolver.class);
-        MavenPluginManager pluginManager = mock(MavenPluginManager.class);
-        MavenSession session = mock(MavenSession.class);
-        when(session.getRepositorySession()).thenReturn(mock(RepositorySystemSession.class));
-        writeDeclaredField(mojo, "mojoDescriptorCreator", mojoDescriptorCreator, true);
-        writeDeclaredField(mojo, "pluginVersionResolver", pluginVersionResolver, true);
-        writeDeclaredField(mojo, "pluginManager", pluginManager, true);
-        writeField(mojo, "session", session, true);
-        MavenProject mavenProject = new MavenProject();
-        mavenProject.setPluginArtifactRepositories(Collections.emptyList());
-        writeField(mojo, "project", mavenProject, true);
-        when(pluginManager.getPluginDescriptor(any(Plugin.class), anyList(), any()))
-                .thenReturn(pd);
+        org.apache.maven.api.plugin.descriptor.PluginDescriptor returned =
+                (org.apache.maven.api.plugin.descriptor.PluginDescriptor)
+                        invokeMethod(mojo, true, "lookupPluginDescriptor", pi);
 
-        PluginDescriptor returned = (PluginDescriptor) invokeMethod(mojo, true, "lookupPluginDescriptor", pi);
-
-        assertEquals(pd, returned);
-
-        verify(mojoDescriptorCreator, never()).findPluginForPrefix(any(String.class), any(MavenSession.class));
-        verify(pluginVersionResolver, never()).resolve(any(PluginVersionRequest.class));
-        ArgumentCaptor<Plugin> argument = ArgumentCaptor.forClass(Plugin.class);
-        verify(pluginManager).getPluginDescriptor(argument.capture(), anyList(), any());
-        Plugin capturedPlugin = argument.getValue();
-        assertEquals("org.test", capturedPlugin.getGroupId());
-        assertEquals("test", capturedPlugin.getArtifactId());
-        assertEquals("1.0", capturedPlugin.getVersion());
+        assertEquals("org.test", returned.getGroupId());
+        assertEquals("test", returned.getArtifactId());
+        assertEquals("1.0", returned.getVersion());
     }
 
     @Test
