@@ -266,6 +266,17 @@
                   <outputDirectory>${project.build.directory}/generated-sources/maven-dependencies</outputDirectory>
                   <includes>**/SettingsTransformer.java,**/SettingsMerger.java</includes>
                 </artifactItem>
+                <artifactItem>
+                  <groupId>org.eclipse.sisu</groupId>
+                  <artifactId>org.eclipse.sisu.plexus</artifactId>
+                  <version>${sisuVersion}</version>
+                  <classifier>sources</classifier>
+                  <type>jar</type>
+                  <outputDirectory>${project.build.directory}/generated-sources/maven-dependencies</outputDirectory>
+                  <includes>**/ExpressionEvaluationException.java,
+                    **/TypeAwareExpressionEvaluator.java,
+                    **/ExpressionEvaluator.java</includes>
+                </artifactItem>
               </artifactItems>
             </configuration>
           </execution>
