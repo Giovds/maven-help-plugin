@@ -96,7 +96,7 @@ class EffectivePomMojoTest {
     Project createProject(Session s) throws Exception {
         Path path = Paths.get(getClass()
                 .getResource(CONFIG_XML.substring("classpath:".length()))
-                .getFile());
+                .toURI());
         Model model;
         try (InputStream is = Files.newInputStream(path)) {
             InputSource source = new InputSource(null, path.toUri().toString());
