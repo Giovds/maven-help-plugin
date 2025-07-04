@@ -26,12 +26,10 @@ import java.net.URLClassLoader;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.StringTokenizer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -44,6 +42,7 @@ import org.apache.maven.api.Project;
 import org.apache.maven.api.Session;
 import org.apache.maven.api.di.Inject;
 import org.apache.maven.api.model.Plugin;
+import org.apache.maven.api.model.PluginExecution;
 import org.apache.maven.api.model.PluginManagement;
 import org.apache.maven.api.plugin.MojoException;
 import org.apache.maven.api.plugin.annotations.Mojo;
@@ -676,15 +675,13 @@ public class DescribeMojo extends AbstractHelpMojo {
     private boolean describeCommand(StringBuilder descriptionBuffer) throws MojoException {
         if (cmd.indexOf(':') == -1) {
             // phase
-            final Map<String, Lifecycle> allMainPhases = getAllMainPhases();
-            final Lifecycle cmdLifecycle = Optional.ofNullable(allMainPhases.get(cmd))
-                    .orElseThrow(() -> new MojoException("The given phase '" + cmd + "' is an unknown phase."));
-
-            final Map<String, String> defaultLifecyclePhases = getDefaultLifecyclePhasesWithGoals();
+            final Map<String, String> allPhasesWithLifecycle = getAllPhasesWithLifecycle();
+            final Lifecycle cmdLifecycle = getCmdLifecycle();
+            final Map<String, String> defaultLifecyclePhases = mapPhasesToPluginsInLifecycle();
             final List<String> cmdLifecyclePhases =
                     cmdLifecycle.allPhases().map(Lifecycle.Phase::name).toList();
 
-            if (cmdLifecycle.phases().isEmpty()) {
+            if (cmdLifecycle.id().equals(Lifecycle.DEFAULT)) {
                 descriptionBuffer.append("'").append(cmd);
                 descriptionBuffer
                         .append("' is a phase corresponding to this plugin:")
@@ -701,7 +698,7 @@ public class DescribeMojo extends AbstractHelpMojo {
 
                 descriptionBuffer.append(LS);
                 descriptionBuffer.append("It is a part of the lifecycle for the POM packaging '");
-                descriptionBuffer.append(project.getPackaging());
+                descriptionBuffer.append(project.getPackaging().id());
                 descriptionBuffer.append("'. This lifecycle includes the following phases:");
                 descriptionBuffer.append(LS);
                 for (String key : cmdLifecyclePhases) {
@@ -729,8 +726,10 @@ public class DescribeMojo extends AbstractHelpMojo {
 
                 for (String key : cmdLifecyclePhases) {
                     descriptionBuffer.append("* ").append(key).append(": ");
-                    if (allMainPhases.get(key) != null) {
-                        descriptionBuffer.append(allMainPhases.get(key)).append(LS);
+                    if (allPhasesWithLifecycle.get(key) != null) {
+                        descriptionBuffer
+                                .append(allPhasesWithLifecycle.get(key))
+                                .append(LS);
                     } else {
                         descriptionBuffer.append(NOT_DEFINED).append(LS);
                     }
@@ -754,32 +753,47 @@ public class DescribeMojo extends AbstractHelpMojo {
         return true;
     }
 
-    private Map<String, String> getDefaultLifecyclePhasesWithGoals() {
+    private Lifecycle getCmdLifecycle() {
         final LifecycleRegistry lifecycleRegistry = session.getService(LifecycleRegistry.class);
-        final Collection<Lifecycle.Phase> defaultLifecycleMainPhases = lifecycleRegistry.stream()
-                .filter(x -> Lifecycle.DEFAULT.equals(x.id()))
+        return lifecycleRegistry.stream()
+                .filter(lifecycle -> lifecycle.allPhases().anyMatch(p -> cmd.equals(p.name())))
                 .findFirst()
-                .orElseThrow()
-                .phases();
-
-        final Map<String, String> defaultLifecyclePhases = new HashMap<>();
-        for (final Lifecycle.Phase defaultLifecycleMainPhase : defaultLifecycleMainPhases) {
-            for (final Plugin pl : defaultLifecycleMainPhase.plugins()) {
-                final String goals = pl.getExecutions().stream()
-                        .flatMap(execution -> execution.getGoals().stream())
-                        .collect(Collectors.joining(","));
-                defaultLifecyclePhases.put(defaultLifecycleMainPhase.name(), goals);
-            }
-        }
-        return defaultLifecyclePhases;
+                .orElseThrow();
     }
 
-    private Map<String, Lifecycle> getAllMainPhases() {
+    private Map<String, String> mapPhasesToPluginsInLifecycle() {
+        final List<Plugin> plugins = project.getBuild().getPlugins();
+        final Map<String, String> result = new HashMap<>();
+
+        for (final Plugin plugin : plugins) {
+            for (final PluginExecution execution : plugin.getExecutions()) {
+                final String phase = execution.getPhase();
+                if (phase != null && !phase.isEmpty()) {
+                    for (final String goal : execution.getGoals()) {
+                        if (goal == null || goal.isEmpty()) {
+                            continue;
+                        }
+                        result.merge(phase, plugin.getId() + ":" + goal, (oldVal, newVal) -> oldVal + ", " + newVal);
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    private Map<String, String> getAllPhasesWithLifecycle() {
         final LifecycleRegistry lifecycleRegistry = session.getService(LifecycleRegistry.class);
-        Map<String, Lifecycle> phases = new HashMap<>();
+        final Map<String, String> phases = new HashMap<>();
         for (Lifecycle lifecycle : lifecycleRegistry) {
             for (Lifecycle.Phase phase : lifecycle.allPhases().toList()) {
-                phases.putIfAbsent(phase.name(), lifecycle);
+                final String pluginsAndGoals = phase.plugins().stream()
+                        .flatMap(plugin -> plugin.getExecutions().stream()
+                                .flatMap(execution ->
+                                        execution.getGoals().stream().map(goal -> plugin.getId() + ":" + goal)))
+                        .collect(Collectors.joining(", "));
+                if (!pluginsAndGoals.isEmpty()) {
+                    phases.put(phase.name(), pluginsAndGoals);
+                }
             }
         }
         return phases;
