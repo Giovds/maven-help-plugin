@@ -23,7 +23,8 @@ def LS = System.getProperty("line.separator")
 assert buildLog.text.find(
 '(?s)' +
 '  <properties>' + LS +
-'    <maven\\.compiler\\.source>1\\.6</maven\\.compiler\\.source>' + LS +
-'    <maven\\.compiler\\.target>1\\.6</maven\\.compiler\\.target>' + LS +
+'.*' +
+'    <propertyX>1\\.6</propertyX>.*' + LS +
+'    <propertyY>1\\.8</propertyY>' + LS +
 '.*' +
 '  </properties>') != null
