@@ -24,7 +24,7 @@ assert buildLog.text.find(
 '(?s)' +
 '  <properties>' + LS +
 '.*' +
-'    <propertyX>1\\.6</propertyX>.*' + LS +
+'    <propertyX>1\\.6</propertyX>.*' + LS + // The .* is necessary until #10939 is fixed
 '    <propertyY>1\\.8</propertyY>' + LS +
 '.*' +
 '  </properties>') != null
