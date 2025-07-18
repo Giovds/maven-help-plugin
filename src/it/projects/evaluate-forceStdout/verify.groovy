@@ -17,4 +17,7 @@
  * under the License.
  */
 
-assert '1.0' == new File(basedir, 'build.log').readLines().findAll{ !it.startsWith('Picked up JAVA_TOOL_OPTIONS: ') }.first()
+assert '[INFO] [stdout] 1.0' == new File(basedir, 'build.log').readLines().findAll {
+    !it.startsWith('Picked up JAVA_TOOL_OPTIONS: ') &&
+    !it.startsWith('SLF4J(W): Using deprecated simplelogger.properties. Please migrate to maven.logger.properties')
+}.first()
