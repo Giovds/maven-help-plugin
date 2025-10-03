@@ -182,7 +182,7 @@ public class EffectivePomMojo extends AbstractEffectiveMojo {
             XmlWriterRequest<Model> request = XmlWriterRequest.<Model>builder()
                     .content(pom)
                     .writer(sWriter)
-                    .inputLocationFormatter(o -> toString((InputLocation) o))
+                    .inputLocationFormatter(verbose ? o -> toString((InputLocation) o) : o -> "")
                     .build();
             xmlFactory.write(request);
         } catch (XmlWriterException e) {
