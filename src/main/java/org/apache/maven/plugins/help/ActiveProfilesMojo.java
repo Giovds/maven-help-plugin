@@ -19,7 +19,9 @@
 package org.apache.maven.plugins.help;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.maven.api.Project;
 import org.apache.maven.api.model.InputLocation;
@@ -91,7 +93,7 @@ public class ActiveProfilesMojo extends AbstractHelpMojo {
      * @param message   the object where the information will be appended to
      */
     private void getActiveProfileStatement(Project project, StringBuilder message) {
-        List<Profile> activeProfileIds = project.getEffectiveActiveProfiles();
+        Set<Profile> activeProfileIds = new HashSet<>(project.getEffectiveActiveProfiles());
 
         message.append(LS);
         message.append("Active Profiles for Project '").append(project.getId()).append("':");

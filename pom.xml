@@ -65,7 +65,7 @@
 
   <properties>
     <javaVersion>17</javaVersion>
-    <mavenVersion>4.0.0-rc-5</mavenVersion>
+    <mavenVersion>4.0.0-SNAPSHOT</mavenVersion>
     <resolverVersion>2.0.14</resolverVersion>
     <maven-plugin-tools.version>4.0.0-beta-2</maven-plugin-tools.version>
     <project.build.outputTimestamp>2024-10-18T10:10:51Z</project.build.outputTimestamp>
