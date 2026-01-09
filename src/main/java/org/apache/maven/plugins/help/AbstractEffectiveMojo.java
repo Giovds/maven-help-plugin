@@ -20,12 +20,9 @@ package org.apache.maven.plugins.help;
 
 import javax.xml.XMLConstants;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
-import java.io.Writer;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -33,10 +30,11 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 
-import org.apache.maven.project.ProjectBuilder;
+import org.apache.maven.api.Session;
+import org.apache.maven.api.di.Inject;
+import org.apache.maven.api.plugin.annotations.Parameter;
 import org.codehaus.plexus.util.xml.XMLWriter;
 import org.codehaus.plexus.util.xml.XmlWriterUtil;
-import org.eclipse.aether.RepositorySystem;
 import org.jdom2.Document;
 import org.jdom2.JDOMException;
 import org.jdom2.input.SAXBuilder;
@@ -51,28 +49,17 @@ import org.jdom2.output.XMLOutputter;
  */
 public abstract class AbstractEffectiveMojo extends AbstractHelpMojo {
 
-    protected AbstractEffectiveMojo(ProjectBuilder projectBuilder, RepositorySystem repositorySystem) {
-        super(projectBuilder, repositorySystem);
-    }
-
     /**
-     * Utility method to write an XML content to a given file.
+     * This options gives the option to output information in cases where the output has been suppressed by using
+     * <code>-q</code> (quiet option) in Maven.
      *
-     * @param output is the wanted output file.
-     * @param content contains the XML content to be written to the file.
-     * @throws IOException if any
-     * @see AbstractHelpMojo#writeFile(File, String) if encoding is null.
+     * @since 4.0.0
      */
-    protected static void writeXmlFile(File output, String content) throws IOException {
-        if (output == null) {
-            return;
-        }
+    @Parameter(property = "forceStdout", defaultValue = "false")
+    protected boolean forceStdout;
 
-        output.getParentFile().mkdirs();
-        try (Writer out = Files.newBufferedWriter(output.toPath())) {
-            out.write(content);
-        }
-    }
+    @Inject
+    protected Session session;
 
     /**
      * Write comments in the Effective POM/settings header.

@@ -18,18 +18,16 @@
  */
 package org.apache.maven.plugins.help;
 
-import javax.inject.Inject;
-
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 
-import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugins.annotations.Mojo;
-import org.apache.maven.plugins.annotations.Parameter;
-import org.apache.maven.project.MavenProject;
-import org.apache.maven.project.ProjectBuilder;
-import org.eclipse.aether.RepositorySystem;
+import org.apache.maven.api.Project;
+import org.apache.maven.api.model.InputLocation;
+import org.apache.maven.api.model.InputSource;
+import org.apache.maven.api.model.Profile;
+import org.apache.maven.api.plugin.MojoException;
+import org.apache.maven.api.plugin.annotations.Mojo;
+import org.apache.maven.api.plugin.annotations.Parameter;
 
 /**
  * Displays a list of the profiles which are currently active for this build.
@@ -45,24 +43,18 @@ public class ActiveProfilesMojo extends AbstractHelpMojo {
     /**
      * This is the list of projects currently slated to be built by Maven.
      */
-    @Parameter(defaultValue = "${reactorProjects}", required = true, readonly = true)
-    private List<MavenProject> projects;
-
-    @Inject
-    public ActiveProfilesMojo(ProjectBuilder projectBuilder, RepositorySystem repositorySystem) {
-        super(projectBuilder, repositorySystem);
-    }
+    @Parameter(defaultValue = "${session.projects}", required = true, readonly = true)
+    private List<Project> projects;
 
     // ----------------------------------------------------------------------
     // Public methods
     // ----------------------------------------------------------------------
 
     /** {@inheritDoc} */
-    @Override
-    public void execute() throws MojoExecutionException {
+    public void execute() throws MojoException {
         StringBuilder message = new StringBuilder();
 
-        for (MavenProject project : projects) {
+        for (Project project : projects) {
             getActiveProfileStatement(project, message);
 
             message.append(LS).append(LS);
@@ -74,12 +66,12 @@ public class ActiveProfilesMojo extends AbstractHelpMojo {
             sb.append("See: https://maven.apache.org/plugins/maven-help-plugin/")
                     .append(LS)
                     .append(LS);
-            sb.append(message.toString());
+            sb.append(message);
 
             try {
                 writeFile(output, sb);
             } catch (IOException e) {
-                throw new MojoExecutionException("Cannot write active profiles to output: " + output, e);
+                throw new MojoException("Cannot write active profiles to output: " + output, e);
             }
 
             getLog().info("Active profile report written to: " + output);
@@ -98,8 +90,8 @@ public class ActiveProfilesMojo extends AbstractHelpMojo {
      * @param project   the current project
      * @param message   the object where the information will be appended to
      */
-    private void getActiveProfileStatement(MavenProject project, StringBuilder message) {
-        Map<String, List<String>> activeProfileIds = project.getInjectedProfileIds();
+    private void getActiveProfileStatement(Project project, StringBuilder message) {
+        List<Profile> activeProfileIds = project.getEffectiveActiveProfiles();
 
         message.append(LS);
         message.append("Active Profiles for Project '").append(project.getId()).append("':");
@@ -110,14 +102,19 @@ public class ActiveProfilesMojo extends AbstractHelpMojo {
         } else {
             message.append("The following profiles are active:").append(LS);
 
-            for (Map.Entry<String, List<String>> entry : activeProfileIds.entrySet()) {
-                for (String profileId : entry.getValue()) {
-                    message.append(LS).append(" - ").append(profileId);
-                    message.append(" (source: ").append(entry.getKey()).append(")");
-                }
+            for (Profile profile : activeProfileIds) {
+                message.append(LS).append(" - ").append(profile.getId());
+                message.append(" (source: ").append(getProfileSource(profile)).append(")");
             }
         }
 
         message.append(LS);
+    }
+
+    private static String getProfileSource(Profile profile) {
+        InputLocation location = profile.getLocation("");
+        InputSource src = location != null ? location.getSource() : null;
+        String loc = src != null ? src.getLocation() != null ? src.getLocation() : src.getModelId() : null;
+        return loc != null ? loc : profile.getSource();
     }
 }

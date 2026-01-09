@@ -18,68 +18,60 @@
  */
 package org.apache.maven.plugins.help;
 
-import javax.inject.Inject;
-
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
+import org.apache.maven.api.Project;
+import org.apache.maven.api.model.InputLocation;
+import org.apache.maven.api.model.InputSource;
+import org.apache.maven.api.model.Profile;
+import org.apache.maven.api.plugin.testing.Basedir;
 import org.apache.maven.api.plugin.testing.InjectMojo;
 import org.apache.maven.api.plugin.testing.MojoParameter;
 import org.apache.maven.api.plugin.testing.MojoTest;
-import org.apache.maven.execution.MavenSession;
-import org.apache.maven.project.MavenProject;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
+import static org.apache.maven.api.plugin.testing.MojoExtension.getBasedir;
+import static org.apache.maven.api.plugin.testing.MojoExtension.setVariableValueToObject;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
  * Test class for the active-profiles mojo of the Help Plugin.
  */
 @MojoTest
-class ActiveProfilesMojoTest {
+public class ActiveProfilesMojoTest {
 
-    @Inject
-    private MavenProject project;
+    static final String CONFIG_XML = "classpath:/unit/active-profiles/plugin-config.xml";
 
-    @Inject
-    private MavenSession mavenSession;
+    static final String OUTPUT = "output.txt";
 
-    @TempDir
-    private Path tempDir;
-
-    private Path outputPath;
-
-    @BeforeEach
-    void setup() throws IOException {
-        when(mavenSession.getProjects()).thenReturn(Collections.singletonList(project));
-
-        outputPath = Files.createTempFile(tempDir, "maven-help-plugin-test-", ".txt");
-        mavenSession.getUserProperties().setProperty("outputPath", outputPath.toString());
-    }
     /**
      * Tests that profiles activated in the settings are resolved.
      *
      * @throws Exception in case of errors.
      */
     @Test
-    @InjectMojo(goal = "active-profiles")
-    @MojoParameter(name = "output", value = "${outputPath}")
-    void testActiveProfilesFromSettings(ActiveProfilesMojo mojo) throws Exception {
-        when(project.getInjectedProfileIds())
-                .thenReturn(getProfiles(Collections.singletonList("from-settings"), Collections.emptyList()));
+    @InjectMojo(goal = "active-profiles", pom = CONFIG_XML)
+    @MojoParameter(name = "output", value = OUTPUT)
+    @Basedir
+    public void testActiveProfilesFromSettings(ActiveProfilesMojo mojo) throws Exception {
+        Project project = mock(Project.class);
+        Profile profile = Profile.newBuilder()
+                .id("from-settings")
+                .location("", new InputLocation(1, 1, new InputSource(null, "~/.m2/settings.xml")))
+                .build();
+
+        when(project.getEffectiveActiveProfiles()).thenReturn(List.of(profile));
+
+        setVariableValueToObject(mojo, "projects", List.of(project));
 
         mojo.execute();
 
-        String file = readOutput();
-        assertTrue(file.contains("from-settings (source: external)"));
+        String file = Files.readString(Path.of(getBasedir(), OUTPUT));
+        assertTrue(file.contains("from-settings (source: ~/.m2/settings.xml)"));
     }
 
     /**
@@ -88,27 +80,22 @@ class ActiveProfilesMojoTest {
      * @throws Exception in case of errors.
      */
     @Test
-    @InjectMojo(goal = "active-profiles")
-    @MojoParameter(name = "output", value = "${outputPath}")
-    void testActiveProfilesFromPom(ActiveProfilesMojo mojo) throws Exception {
-        when(project.getInjectedProfileIds())
-                .thenReturn(getProfiles(Collections.emptyList(), Collections.singletonList("from-pom")));
+    @InjectMojo(goal = "active-profiles", pom = CONFIG_XML)
+    @MojoParameter(name = "output", value = OUTPUT)
+    @Basedir
+    public void testActiveProfilesFromPom(ActiveProfilesMojo mojo) throws Exception {
+        Project project = mock(Project.class);
+        Profile profile = Profile.newBuilder()
+                .id("from-pom")
+                .location("", new InputLocation(1, 1, new InputSource("org.apache.maven.test:test:1.0", null)))
+                .build();
+        when(project.getEffectiveActiveProfiles()).thenReturn(List.of(profile));
+
+        setVariableValueToObject(mojo, "projects", List.of(project));
 
         mojo.execute();
 
-        String file = readOutput();
+        String file = Files.readString(Path.of(getBasedir(), OUTPUT));
         assertTrue(file.contains("from-pom (source: org.apache.maven.test:test:1.0)"));
-    }
-
-    private Map<String, List<String>> getProfiles(List<String> externals, List<String> pom) {
-        Map<String, List<String>> profiles = new HashMap<>();
-        profiles.put("external", externals); // from settings
-        profiles.put("org.apache.maven.test:test:1.0", pom); // from POM
-        profiles.put("", Collections.emptyList()); // from super POM
-        return profiles;
-    }
-
-    private String readOutput() throws IOException {
-        return new String(Files.readAllBytes(outputPath));
     }
 }

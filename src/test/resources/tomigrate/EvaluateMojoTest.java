@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.maven.plugins.help;
+package tomigrate;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
